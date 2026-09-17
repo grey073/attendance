@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-
+import { supabase } from "../lib/supabase";
 const members = ["Hima", "Hunter", "Chinju"];
 const memberKeys = {
   Hima: "hima",
@@ -45,20 +45,35 @@ export default function TodoPage() {
     dueDate: today,
     priority: "Normal",
   });
+// Load tasks from Supabase
+useEffect(() => {
+  const loadTasks = async () => {
+    const { data, error } = await supabase
+      .from("todos")
+      .select("*")
+      .order("created_at", { ascending: true });
 
-  useEffect(() => {
-    const savedTasks = window.localStorage.getItem("planner-tasks");
-    const loadTasks = window.setTimeout(() => {
-      setTasks(savedTasks ? JSON.parse(savedTasks) : []);
-    }, 0);
+    if (error) {
+      console.error("Error loading tasks:", error);
+      setTasks([]);
+      return;
+    }
 
-    return () => window.clearTimeout(loadTasks);
-  }, []);
+    const formattedTasks = (data ?? []).map((task) => ({
+      id: task.id,
+      title: task.title,
+      assignee: task.assignee,
+      dueDate: task.due_date,
+      priority: task.priority,
+      completed: task.completed,
+    }));
 
-  useEffect(() => {
-    if (tasks === null) return;
-    window.localStorage.setItem("planner-tasks", JSON.stringify(tasks));
-  }, [tasks]);
+    setTasks(formattedTasks);
+  };
+
+  loadTasks();
+}, []);
+ 
 
   const visibleTasks = useMemo(() => {
     if (view === "day") {
@@ -91,35 +106,96 @@ export default function TodoPage() {
   const updateForm = (event) => {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
   };
+const addTask = async (event) => {
+  event.preventDefault();
 
-  const addTask = (event) => {
-    event.preventDefault();
-    const title = form.title.trim();
-    if (!title) return;
+  const title = form.title.trim();
+  if (!title) return;
 
-    setTasks((current) => [
-      ...(current ?? []),
-      {
-        id: `${Date.now()}-${title}`,
-        ...form,
-        title,
-        completed: false,
-      },
-    ]);
-    setForm((current) => ({ ...current, title: "" }));
+  const { data, error } = await supabase
+    .from("todos")
+    .insert({
+      title: title,
+      assignee: form.assignee,
+      due_date: form.dueDate,
+      priority: form.priority,
+      completed: false,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error adding task:", error);
+    return;
+  }
+
+  const newTask = {
+    id: data.id,
+    title: data.title,
+    assignee: data.assignee,
+    dueDate: data.due_date,
+    priority: data.priority,
+    completed: data.completed,
   };
 
-  const toggleTask = (taskId) => {
-    setTasks((current) =>
-      (current ?? []).map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task
-      )
-    );
-  };
+  setTasks((current) => [
+    ...(current ?? []),
+    newTask,
+  ]);
 
-  const deleteTask = (taskId) => {
-    setTasks((current) => (current ?? []).filter((task) => task.id !== taskId));
-  };
+  setForm((current) => ({
+    ...current,
+    title: "",
+  }));
+};
+ 
+  
+
+ const toggleTask = async (taskId) => {
+  const currentTask = (tasks ?? []).find(
+    (task) => task.id === taskId
+  );
+
+  if (!currentTask) return;
+
+  const newCompleted = !currentTask.completed;
+
+  const { error } = await supabase
+    .from("todos")
+    .update({
+      completed: newCompleted,
+    })
+    .eq("id", taskId);
+
+  if (error) {
+    console.error("Error updating task:", error);
+    return;
+  }
+
+  setTasks((current) =>
+    (current ?? []).map((task) =>
+      task.id === taskId
+        ? { ...task, completed: newCompleted }
+        : task
+    )
+  );
+};
+
+ const deleteTask = async (taskId) => {
+  const { error } = await supabase
+    .from("todos")
+    .delete()
+    .eq("id", taskId);
+
+  if (error) {
+    console.error("Error deleting task:", error);
+    return;
+  }
+
+  setTasks((current) =>
+    (current ?? []).filter((task) => task.id !== taskId)
+  );
+};
 
   return (
     <main className="todo-page">

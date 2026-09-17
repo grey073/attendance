@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -38,13 +39,13 @@ export default function Navbar() {
 
         <h2>Menu</h2>
 
-        <button className="menu-item">
+        <Link href="/" className="menu-item" onClick={() => setMenuOpen(false)}>
           Attendance
-        </button>
+        </Link>
 
-        <button className="menu-item">
+        <Link href="/todo" className="menu-item" onClick={() => setMenuOpen(false)}>
           Todo
-        </button>
+        </Link>
       </div>
 
       {menuOpen && (
